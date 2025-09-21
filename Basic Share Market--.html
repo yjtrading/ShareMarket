@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Financial Market Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col">
+
+<!-- HEADER -->
+<header class="p-4 bg-gray-800 shadow flex justify-between items-center">
+  <h1 class="text-xl font-bold text-teal-400">📊 Financial Market Dashboard</h1>
+  <div id="userBox" class="text-sm text-gray-300">Loading user...</div>
+</header>
+
+<main class="flex-1 p-4 space-y-4">
+
+  <!-- SETTINGS PANEL -->
+  <div class="bg-gray-800 p-4 rounded-xl shadow">
+    <h3 class="text-lg font-bold mb-2 text-teal-400">Signal Tools</h3>
+    <div class="flex flex-wrap gap-4 text-sm text-gray-300">
+      <label><input type="checkbox" id="tool-sma" checked> SMA Crossover</label>
+      <label><input type="checkbox" id="tool-ema" checked> EMA</label>
+      <label><input type="checkbox" id="tool-rsi" checked> RSI</label>
+      <label><input type="checkbox" id="tool-macd" checked> MACD</label>
+      <label><input type="checkbox" id="tool-bbands" checked> Bollinger Bands</label>
+    </div>
+  </div>
+
+  <!-- FINAL SIGNAL -->
+  <div id="signalBox" class="bg-gray-700 p-4 rounded-xl shadow">
+    <h3 class="text-lg font-bold mb-2 text-yellow-400">Final Signal</h3>
+    <p id="finalSignal" class="text-2xl font-bold">Loading...</p>
+  </div>
+
+  <!-- CHART -->
+  <div class="bg-gray-800 p-4 rounded-xl shadow">
+    <h3 class="text-lg font-bold mb-2 text-teal-400">Price Chart</h3>
+    <canvas id="priceChart" height="120"></canvas>
+  </div>
+</main>
+
+<!-- FOOTER -->
+<footer class="p-4 text-center text-gray-400 text-xs">
+  Built with TailwindCSS, Firebase & Chart.js | Mock Data Demo
+</footer>
+
+<script type="module">
+/* ========== Firebase Setup ========== */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+import { getFirestore } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+
+// Replace with your values
+const __firebase_config = { /* your firebase config */ };
+const __app_id = "demo-app";
+const __initial_auth_token = null; // provide token if available
+
+const app = initializeApp(__firebase_config);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+async function login() {
+  try {
+    if (__initial_auth_token) {
+      await signInWithCustomToken(auth, __initial_auth_token);
+    } else {
+      await signInAnonymously(auth);
+    }
+  } catch (e) { console.error(e); }
+}
+
+onAuthStateChanged(auth, (user) => {
+  if (user) {
+    document.getElementById("userBox").innerText = "User: " + user.uid;
+  }
+});
+
+login();
+
+/* ========== Mock Data + Indicators ========== */
+let mockPrices = [];
+function updateMockData() {
+  let last = mockPrices[mockPrices.length - 1] || 1000;
+  let newPrice = last + (Math.random() - 0.5) * 20;
+  mockPrices.push(newPrice);
+  if (mockPrices.length > 300) mockPrices.shift();
+  updateChart();
+  runAnalysis();
+}
+setInterval(updateMockData, 3000);
+
+function SMA(prices, period) {
+  if (prices.length < period) return null;
+  let slice = prices.slice(-period);
+  return slice.reduce((a,b)=>a+b,0)/period;
+}
+function EMA(prices, period) {
+  if (prices.length < period) return null;
+  let k = 2/(period+1);
+  let ema = prices[prices.length-period];
+  for (let i = prices.length-period+1; i < prices.length; i++) {
+    ema = prices[i]*k + ema*(1-k);
+  }
+  return ema;
+}
+function RSI(prices, period=14) {
+  if (prices.length < period+1) return null;
+  let gains=0, losses=0;
+  for (let i=prices.length-period; i<prices.length; i++) {
+    let diff = prices[i] - prices[i-1];
+    if (diff>=0) gains += diff; else losses -= diff;
+  }
+  let rs = gains / (losses || 1);
+  return 100 - (100/(1+rs));
+}
+function MACD(prices) {
+  let ema12 = EMA(prices,12);
+  let ema26 = EMA(prices,26);
+  if (!ema12 || !ema26) return null;
+  return ema12 - ema26;
+}
+function Bollinger(prices, period=20) {
+  if (prices.length < period) return null;
+  let sma = SMA(prices, period);
+  let slice = prices.slice(-period);
+  let variance = slice.reduce((a,b)=>a+(b-sma)**2,0)/period;
+  let stdDev = Math.sqrt(variance);
+  return { upper: sma+2*stdDev, lower: sma-2*stdDev, mid: sma };
+}
+
+/* ========== Decision Logic ========== */
+function runAnalysis() {
+  if (mockPrices.length < 50) return;
+
+  let votes = [];
+
+  if (document.getElementById("tool-sma").checked) {
+    let sma50 = SMA(mockPrices,50);
+    let sma200 = SMA(mockPrices,200);
+    if (sma50 && sma200) votes.push(sma50 > sma200 ? "Buy" : "Sell");
+  }
+  if (document.getElementById("tool-ema").checked) {
+    let ema9 = EMA(mockPrices,9);
+    let ema21 = EMA(mockPrices,21);
+    if (ema9 && ema21) votes.push(ema9 > ema21 ? "Buy" : "Sell");
+  }
+  if (document.getElementById("tool-rsi").checked) {
+    let rsi = RSI(mockPrices,14);
+    if (rsi) {
+      if (rsi < 30) votes.push("Buy");
+      else if (rsi > 70) votes.push("Sell");
+    }
+  }
+  if (document.getElementById("tool-macd").checked) {
+    let macd = MACD(mockPrices);
+    if (macd) votes.push(macd > 0 ? "Buy" : "Sell");
+  }
+  if (document.getElementById("tool-bbands").checked) {
+    let bb = Bollinger(mockPrices,20);
+    let price = mockPrices[mockPrices.length-1];
+    if (bb) {
+      if (price < bb.lower) votes.push("Buy");
+      else if (price > bb.upper) votes.push("Sell");
+    }
+  }
+
+  let buyVotes = votes.filter(v=>v==="Buy").length;
+  let sellVotes = votes.filter(v=>v==="Sell").length;
+  let decision = buyVotes > sellVotes ? "Buy" : (sellVotes > buyVotes ? "Sell" : "Neutral");
+
+  document.getElementById("finalSignal").innerText = decision +
+    ` (${buyVotes} Buy vs ${sellVotes} Sell)`;
+}
+
+/* ========== Chart.js Setup ========== */
+const ctx = document.getElementById('priceChart').getContext('2d');
+const priceChart = new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [{
+      label: 'Price',
+      data: [],
+      borderColor: 'rgba(75,192,192,1)',
+      borderWidth: 2,
+      fill: false
+    }]
+  },
+  options: {
+    responsive: true,
+    scales: {
+      x: { ticks: { color: '#ccc' } },
+      y: { ticks: { color: '#ccc' } }
+    },
+    plugins: { legend: { labels: { color: '#fff' } } }
+  }
+});
+
+function updateChart() {
+  priceChart.data.labels = mockPrices.map((_,i)=>i);
+  priceChart.data.datasets[0].data = mockPrices;
+  priceChart.update();
+}
+</script>
+</body>
+</html>

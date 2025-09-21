@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Financial Market Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col">
+
+  <!-- Header -->
+  <header class="p-4 bg-gray-800 shadow-md flex justify-between items-center">
+    <h1 class="text-xl font-bold">📊 Share Market Dashboard</h1>
+    <span id="userId" class="text-sm text-green-400">User: Guest</span>
+  </header>
+
+  <!-- Main -->
+  <main class="flex-1 p-4 space-y-4">
+
+    <!-- Tools -->
+    <section class="bg-gray-800 rounded-xl p-4 shadow">
+      <h2 class="text-lg font-semibold mb-2">Tools</h2>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <label class="flex items-center space-x-2">
+          <input id="smaTool" type="checkbox" class="form-checkbox text-blue-500" checked>
+          <span>SMA</span>
+        </label>
+        <label class="flex items-center space-x-2">
+          <input id="emaTool" type="checkbox" class="form-checkbox text-blue-500" checked>
+          <span>EMA</span>
+        </label>
+        <label class="flex items-center space-x-2">
+          <input id="rsiTool" type="checkbox" class="form-checkbox text-blue-500">
+          <span>RSI</span>
+        </label>
+        <label class="flex items-center space-x-2">
+          <input id="macdTool" type="checkbox" class="form-checkbox text-blue-500">
+          <span>MACD</span>
+        </label>
+      </div>
+    </section>
+
+    <!-- Chart -->
+    <section class="bg-gray-800 rounded-xl p-4 shadow">
+      <h2 class="text-lg font-semibold mb-2">Price Chart</h2>
+      <canvas id="priceChart" class="w-full h-64"></canvas>
+    </section>
+
+    <!-- Signals -->
+    <section class="bg-gray-800 rounded-xl p-4 shadow">
+      <h2 class="text-lg font-semibold mb-2">Signals</h2>
+      <div id="signals" class="text-green-400">Waiting for data...</div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="p-4 bg-gray-800 text-center text-sm text-gray-400">
+    © 2025 Share Market Dashboard
+  </footer>
+
+  <!-- JS -->
+  <script>
+    // ===============================
+    // Mock Data
+    // ===============================
+    let prices = [];
+    function randomPrice(base=100) {
+      return base + (Math.random()-0.5)*2;
+    }
+    function generateMockData(count=50, base=100) {
+      prices = [];
+      let last = base;
+      for(let i=0;i<count;i++){
+        last = randomPrice(last);
+        prices.push(last);
+      }
+    }
+
+    // ===============================
+    // Indicators
+    // ===============================
+    function sma(data, period) {
+      if (data.length < period) return null;
+      return data.slice(-period).reduce((a,b)=>a+b,0)/period;
+    }
+    function ema(data, period) {
+      if (data.length < period) return null;
+      let k = 2/(period+1);
+      return data.slice(-period).reduce((acc,val,i)=>{
+        return acc + val*Math.pow(1-k,i);
+      },0) / (period);
+    }
+    function rsi(data, period=14) {
+      if (data.length < period+1) return null;
+      let gains=0, losses=0;
+      for(let i=data.length-period;i<data.length;i++){
+        let diff = data[i]-data[i-1];
+        if(diff>=0) gains+=diff; else losses-=diff;
+      }
+      if(losses===0) return 100;
+      let rs=gains/losses;
+      return 100-100/(1+rs);
+    }
+    function macd(data, short=12, long=26) {
+      let emaShort = ema(data, short);
+      let emaLong = ema(data, long);
+      if(!emaShort||!emaLong) return null;
+      return emaShort-emaLong;
+    }
+
+    // ===============================
+    // Chart Setup
+    // ===============================
+    const ctx=document.getElementById('priceChart').getContext('2d');
+    const chart=new Chart(ctx,{
+      type:'line',
+      data:{labels:[],datasets:[{label:'Price',data:[],borderColor:'rgb(75,192,192)',tension:0.1}]},
+      options:{responsive:true,scales:{x:{display:false},y:{beginAtZero:false}}}
+    });
+
+    // ===============================
+    // Update Loop
+    // ===============================
+    function update(){
+      let newPrice=randomPrice(prices[prices.length-1]);
+      prices.push(newPrice);
+      if(prices.length>100) prices.shift();
+      chart.data.labels=prices.map((_,i)=>i);
+      chart.data.datasets[0].data=prices;
+      chart.update();
+
+      // Compute signals
+      let sigs=[];
+      if(document.getElementById('smaTool').checked){
+        let sma50=sma(prices,50), sma200=sma(prices,200);
+        if(sma50&&sma200){
+          if(sma50>sma200) sigs.push("SMA: 📈 Buy");
+          else sigs.push("SMA: 📉 Sell");
+        }
+      }
+      if(document.getElementById('emaTool').checked){
+        let ema20=ema(prices,20), ema50=ema(prices,50);
+        if(ema20&&ema50){
+          if(ema20>ema50) sigs.push("EMA: 📈 Buy");
+          else sigs.push("EMA: 📉 Sell");
+        }
+      }
+      if(document.getElementById('rsiTool').checked){
+        let r=rsi(prices);
+        if(r){
+          if(r<30) sigs.push("RSI: 📈 Oversold → Buy");
+          else if(r>70) sigs.push("RSI: 📉 Overbought → Sell");
+        }
+      }
+      if(document.getElementById('macdTool').checked){
+        let m=macd(prices);
+        if(m){
+          if(m>0) sigs.push("MACD: 📈 Bullish");
+          else sigs.push("MACD: 📉 Bearish");
+        }
+      }
+      document.getElementById('signals').innerHTML=sigs.join("<br>")||"No clear signals";
+    }
+
+    // ===============================
+    // Init
+    // ===============================
+    generateMockData();
+    setInterval(update,2000);
+  </script>
+</body>
+</html>
