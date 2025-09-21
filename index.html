@@ -72,6 +72,7 @@ body { font-family: 'Inter', sans-serif; }
 <footer class="p-4 bg-gray-800 text-center text-sm">Share Market Dashboard &copy; 2025</footer>
 
 <script>
+// ------------------- Elements -------------------
 const indicesEl=document.getElementById("indices");
 const marketNewsEl=document.getElementById("marketNews");
 const currentSymbolEl=document.getElementById("currentSymbol");
@@ -89,7 +90,7 @@ const trendTool=document.getElementById("trendTool");
 let selectedSymbol=null;
 let chart,candleSeries;
 
-// Mock indices and news
+// ------------------- Mock Data -------------------
 const mockIndices=[
 {name:"Nifty 50",price:18500,change:120},
 {name:"Sensex",price:62000,change:-50},
@@ -100,16 +101,23 @@ const mockNews=[
 "Sensex falls due to global cues",
 "USD/INR steady amid RBI policy"
 ];
-
 function renderIndices(){indicesEl.innerHTML="";mockIndices.forEach(i=>{const tclass=i.change>=0?"trend-up":"trend-down";const d=document.createElement("div");d.innerHTML=`<strong>${i.name}:</strong> ${i.price} (<span class="${tclass}">${i.change>=0?"+":""}${i.change}</span>)`;indicesEl.appendChild(d);});}
 function renderNews(){marketNewsEl.innerHTML="";mockNews.forEach(n=>{const li=document.createElement("li");li.textContent=n;marketNewsEl.appendChild(li);});}
+
+// ------------------- Chart -------------------
 function createChart(){const el=document.getElementById("chart");chart=LightweightCharts.createChart(el,{layout:{background:"#1f2937",textColor:"white"},grid:{vertLines:{color:"#334155"},horzLines:{color:"#334155"}}});candleSeries=chart.addCandlestickSeries({upColor:"#10b981",downColor:"#ef4444",borderVisible:false,wickUpColor:"#10b981",wickDownColor:"#ef4444"});}
 
-// RapidAPI setup
+// ------------------- RapidAPI -------------------
 const RAPIDAPI_KEY="b64d9be769mshaa69fda91feb993p135471jsn023a17d52704";
 const RAPIDAPI_HOST="apidojo-yahoo-finance-v1.p.rapidapi.com";
 
-// Fetch historical candlestick data
+// ------------------- Indicator Calculations -------------------
+function calculateSMA(data, period){let sma=[];for(let i=0;i<data.length;i++){if(i<period-1){sma.push(null);}else{let sum=0;for(let j=i-period+1;j<=i;j++)sum+=data[j].close;sma.push(sum/period);}}return sma;}
+function calculateEMA(data, period){let ema=[];let k=2/(period+1);for(let i=0;i<data.length;i++){if(i===0)ema.push(data[i].close);else ema.push(data[i].close*k + ema[i-1]*(1-k));}return ema;}
+function calculateRSI(data, period=14){let rsi=[];for(let i=0;i<data.length;i++){if(i<period){rsi.push(null);continue;}let gains=0,losses=0;for(let j=i-period+1;j<=i;j++){let diff=data[j].close-data[j-1].close;if(diff>0) gains+=diff;else losses+=-diff;}let rs=gains/losses;rsi.push(100-(100/(1+rs)));}return rsi;}
+function calculateMACD(data, fast=12, slow=26, signal=9){let emaFast=calculateEMA(data,fast);let emaSlow=calculateEMA(data,slow);let macd=[];for(let i=0;i<data.length;i++){macd.push(emaFast[i]-emaSlow[i]);}let signalLine=calculateEMA(macd.map(v=>({close:v})),signal);return {macd,signalLine};}
+
+// ------------------- Fetch Candles -------------------
 async function fetchCandles(symbol,interval="1d"){
 try{
 const res=await fetch(`https://${RAPIDAPI_HOST}/stock/v2/get-timeseries?symbol=${symbol}&region=US`,{
@@ -118,7 +126,7 @@ headers:{"x-rapidapi-key":RAPIDAPI_KEY,"x-rapidapi-host":RAPIDAPI_HOST}
 });
 const data=await res.json();
 if(!data.timeseries) return;
-const candles=[];
+let candles=[];
 for(const t in data.timeseries){
 const c=data.timeseries[t].close;
 const o=data.timeseries[t].open;
@@ -128,10 +136,17 @@ candles.push({time:Math.floor(new Date(t).getTime()/1000),open:o,high:h,low:l,cl
 }
 candles.reverse();
 candleSeries.setData(candles);
+
+// Compute indicators if enabled
+if(smaTool.checked){console.log("SMA",calculateSMA(candles,14));}
+if(emaTool.checked){console.log("EMA",calculateEMA(candles,14));}
+if(rsiTool.checked){console.log("RSI",calculateRSI(candles,14));}
+if(macdTool.checked){console.log("MACD",calculateMACD(candles));}
+
 }catch(e){console.error(e);}
 }
 
-// Fetch latest price
+// ------------------- Fetch Price -------------------
 async function fetchPrice(symbol){
 try{
 const res=await fetch(`https://${RAPIDAPI_HOST}/stock/v2/get-summary?symbol=${symbol}&region=US`,{
@@ -144,16 +159,15 @@ currentPriceEl.textContent=data.price.regularMarketPrice;
 const trend=trendTool.checked?(data.price.regularMarketChange>=0?"Up":"Down"):"--";
 currentTrendEl.textContent=trend;
 currentTrendEl.className=trend==="Up"?"trend-up":trend==="Down"?"trend-down":"";
+// Buy/Sell based on SMA placeholder
 signalEl.textContent=smaTool.checked?(data.price.regularMarketPrice%2>1?"Buy":"Sell"):"--";
 }catch(e){console.error(e);}
 }
 
-async function updateDashboard(){
-if(!selectedSymbol) return;
-fetchPrice(selectedSymbol);
-fetchCandles(selectedSymbol);
-}
+// ------------------- Update -------------------
+async function updateDashboard(){if(!selectedSymbol) return;fetchPrice(selectedSymbol);fetchCandles(selectedSymbol);}
 
+// ------------------- Event Listeners -------------------
 searchBtn.addEventListener("click",()=>{
 const sym=symbolInput.value.trim();
 if(!sym) return;
@@ -167,7 +181,6 @@ btn.addEventListener("click",()=>{
 if(!selectedSymbol) return;
 const interval=btn.dataset.interval;
 fetchCandles(selectedSymbol,interval);
-});
 });
 
 // Initial render
