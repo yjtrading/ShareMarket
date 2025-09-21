@@ -11,22 +11,22 @@
 body { font-family: 'Inter', sans-serif; }
 .trend-up { color: #10b981; }
 .trend-down { color: #ef4444; }
-.disabled { opacity: 0.5; pointer-events: none; }
 #chart { height: 400px; }
+.disabled { opacity: 0.5; pointer-events: none; }
 </style>
 </head>
 <body class="bg-gray-900 text-white min-h-screen flex flex-col">
 
 <header class="p-4 bg-gray-800 shadow-md flex justify-between items-center">
 <h1 class="text-2xl font-bold">Share Market Dashboard</h1>
-<div id="userInfo" class="text-sm">Loading user...</div>
+<div id="userInfo" class="text-sm">Local Mode</div>
 </header>
 
 <main class="flex-1 p-4 flex flex-col md:flex-row gap-4">
 
 <section class="flex-1 flex flex-col gap-4">
 <div class="flex gap-2">
-<input id="symbolInput" type="text" placeholder="Stock, index, commodity, forex" class="flex-1 p-2 rounded bg-gray-800 text-white outline-none">
+<input id="symbolInput" type="text" placeholder="Stock, index, commodity, forex (e.g. RELIANCE.NS)" class="flex-1 p-2 rounded bg-gray-800 text-white outline-none">
 <button id="searchBtn" class="px-4 py-2 bg-blue-600 rounded hover:bg-blue-500">Search</button>
 </div>
 
@@ -45,7 +45,6 @@ body { font-family: 'Inter', sans-serif; }
 <div class="bg-gray-800 p-4 rounded shadow-md">
 <h2 class="font-semibold mb-2" id="currentSymbol">Select a symbol</h2>
 <p>Price: <span id="currentPrice">--</span></p>
-<p>Volume: <span id="currentVolume">--</span></p>
 <p>Trend: <span id="currentTrend">--</span></p>
 <p>Buy/Sell Signal: <span id="signal" class="font-bold">--</span></p>
 </div>
@@ -64,127 +63,99 @@ body { font-family: 'Inter', sans-serif; }
 <label><input type="checkbox" id="rsiTool" checked> Enable RSI</label>
 <label><input type="checkbox" id="macdTool" checked> Enable MACD</label>
 <label><input type="checkbox" id="trendTool" checked> Enable Trend Analysis</label>
-<label><input type="checkbox" id="volumeTool" checked> Enable Volume Analysis</label>
 </div>
 
 <div id="chart" class="mt-4"></div>
 </section>
-
 </main>
 
 <footer class="p-4 bg-gray-800 text-center text-sm">Share Market Dashboard &copy; 2025</footer>
 
 <script>
-const indicesEl = document.getElementById("indices");
-const marketNewsEl = document.getElementById("marketNews");
-const currentSymbolEl = document.getElementById("currentSymbol");
-const currentPriceEl = document.getElementById("currentPrice");
-const currentVolumeEl = document.getElementById("currentVolume");
-const currentTrendEl = document.getElementById("currentTrend");
-const signalEl = document.getElementById("signal");
-const symbolInput = document.getElementById("symbolInput");
-const searchBtn = document.getElementById("searchBtn");
-const smaTool = document.getElementById("smaTool");
-const emaTool = document.getElementById("emaTool");
-const rsiTool = document.getElementById("rsiTool");
-const macdTool = document.getElementById("macdTool");
-const trendTool = document.getElementById("trendTool");
-const volumeTool = document.getElementById("volumeTool");
+const indicesEl=document.getElementById("indices");
+const marketNewsEl=document.getElementById("marketNews");
+const currentSymbolEl=document.getElementById("currentSymbol");
+const currentPriceEl=document.getElementById("currentPrice");
+const currentTrendEl=document.getElementById("currentTrend");
+const signalEl=document.getElementById("signal");
+const symbolInput=document.getElementById("symbolInput");
+const searchBtn=document.getElementById("searchBtn");
+const smaTool=document.getElementById("smaTool");
+const emaTool=document.getElementById("emaTool");
+const rsiTool=document.getElementById("rsiTool");
+const macdTool=document.getElementById("macdTool");
+const trendTool=document.getElementById("trendTool");
 
-let selectedSymbol = null;
-let chart, candleSeries;
+let selectedSymbol=null;
+let chart,candleSeries;
 
 // Mock indices and news
-const mockIndices = [
-{ name: "Nifty 50", price: 18500, change: +120 },
-{ name: "Sensex", price: 62000, change: -50 },
-{ name: "USD/INR", price: 83.2, change: +0.1 }
+const mockIndices=[
+{name:"Nifty 50",price:18500,change:120},
+{name:"Sensex",price:62000,change:-50},
+{name:"USD/INR",price:83.2,change:0.1}
 ];
-const mockNews = [
+const mockNews=[
 "Nifty gains 1% on strong IT sector",
 "Sensex falls due to global cues",
 "USD/INR steady amid RBI policy"
 ];
 
-function renderIndices() {
-indicesEl.innerHTML = "";
-mockIndices.forEach(i => {
-const trendClass = i.change >= 0 ? "trend-up" : "trend-down";
-const div = document.createElement("div");
-div.innerHTML = `<strong>${i.name}:</strong> ${i.price} (<span class="${trendClass}">${i.change >= 0 ? '+' : ''}${i.change}</span>)`;
-indicesEl.appendChild(div);
+function renderIndices(){indicesEl.innerHTML="";mockIndices.forEach(i=>{const tclass=i.change>=0?"trend-up":"trend-down";const d=document.createElement("div");d.innerHTML=`<strong>${i.name}:</strong> ${i.price} (<span class="${tclass}">${i.change>=0?"+":""}${i.change}</span>)`;indicesEl.appendChild(d);});}
+function renderNews(){marketNewsEl.innerHTML="";mockNews.forEach(n=>{const li=document.createElement("li");li.textContent=n;marketNewsEl.appendChild(li);});}
+function createChart(){const el=document.getElementById("chart");chart=LightweightCharts.createChart(el,{layout:{background:"#1f2937",textColor:"white"},grid:{vertLines:{color:"#334155"},horzLines:{color:"#334155"}}});candleSeries=chart.addCandlestickSeries({upColor:"#10b981",downColor:"#ef4444",borderVisible:false,wickUpColor:"#10b981",wickDownColor:"#ef4444"});}
+
+// RapidAPI setup
+const RAPIDAPI_KEY="b64d9be769mshaa69fda91feb993p135471jsn023a17d52704";
+const RAPIDAPI_HOST="apidojo-yahoo-finance-v1.p.rapidapi.com";
+
+// Fetch historical candlestick data
+async function fetchCandles(symbol,interval="1d"){
+try{
+const res=await fetch(`https://${RAPIDAPI_HOST}/stock/v2/get-timeseries?symbol=${symbol}&region=US`,{
+method:"GET",
+headers:{"x-rapidapi-key":RAPIDAPI_KEY,"x-rapidapi-host":RAPIDAPI_HOST}
 });
+const data=await res.json();
+if(!data.timeseries) return;
+const candles=[];
+for(const t in data.timeseries){
+const c=data.timeseries[t].close;
+const o=data.timeseries[t].open;
+const h=data.timeseries[t].high;
+const l=data.timeseries[t].low;
+candles.push({time:Math.floor(new Date(t).getTime()/1000),open:o,high:h,low:l,close:c});
+}
+candles.reverse();
+candleSeries.setData(candles);
+}catch(e){console.error(e);}
 }
 
-function renderNews() {
-marketNewsEl.innerHTML = "";
-mockNews.forEach(n => {
-const li = document.createElement("li");
-li.textContent = n;
-marketNewsEl.appendChild(li);
+// Fetch latest price
+async function fetchPrice(symbol){
+try{
+const res=await fetch(`https://${RAPIDAPI_HOST}/stock/v2/get-summary?symbol=${symbol}&region=US`,{
+method:"GET",
+headers:{"x-rapidapi-key":RAPIDAPI_KEY,"x-rapidapi-host":RAPIDAPI_HOST}
 });
+const data=await res.json();
+if(!data.price) return;
+currentPriceEl.textContent=data.price.regularMarketPrice;
+const trend=trendTool.checked?(data.price.regularMarketChange>=0?"Up":"Down"):"--";
+currentTrendEl.textContent=trend;
+currentTrendEl.className=trend==="Up"?"trend-up":trend==="Down"?"trend-down":"";
+signalEl.textContent=smaTool.checked?(data.price.regularMarketPrice%2>1?"Buy":"Sell"):"--";
+}catch(e){console.error(e);}
 }
 
-function createChart() {
-const chartEl = document.getElementById("chart");
-chart = LightweightCharts.createChart(chartEl, {
-layout: { background: '#1f2937', textColor: 'white' },
-grid: { vertLines: { color: '#334155' }, horzLines: { color: '#334155' } },
-crosshair: { mode: LightweightCharts.CrosshairMode.Normal }
-});
-candleSeries = chart.addCandlestickSeries({ upColor: '#10b981', downColor: '#ef4444', borderVisible: false, wickUpColor: '#10b981', wickDownColor: '#ef4444' });
-}
-
-// Alpha Vantage API Key
-const ALPHA_API = "YOUR_ALPHA_VANTAGE_API_KEY";
-
-// Fetch historical data
-async function fetchHistorical(symbol, interval="5min") {
-try {
-const url = `https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=${symbol}.BSE&interval=${interval}&apikey=${ALPHA_API}`;
-const res = await fetch(url);
-const data = await res.json();
-const key = Object.keys(data).find(k => k.includes("Time Series"));
-const timeSeries = data[key];
-const series = Object.keys(timeSeries).map(t => ({
-time: Math.floor(new Date(t).getTime()/1000),
-open: parseFloat(timeSeries[t]['1. open']),
-high: parseFloat(timeSeries[t]['2. high']),
-low: parseFloat(timeSeries[t]['3. low']),
-close: parseFloat(timeSeries[t]['4. close'])
-}));
-series.reverse();
-candleSeries.setData(series);
-} catch(err){ console.error(err); }
-}
-
-// Fetch latest price from Yahoo Finance
-async function fetchPrice(symbol) {
-try {
-const res = await fetch(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=NSE:${symbol}`);
-const data = await res.json();
-const stock = data.quoteResponse.result[0];
-if(!stock) return;
-currentPriceEl.textContent = stock.regularMarketPrice;
-currentVolumeEl.textContent = volumeTool.checked ? stock.regularMarketVolume : "--";
-const trend = trendTool.checked ? (stock.regularMarketChange>=0?"Up":"Down") : "--";
-currentTrendEl.textContent = trend;
-currentTrendEl.className = trend==="Up"?"trend-up":trend==="Down"?"trend-down":"";
-let signal = "--";
-if(smaTool.checked) signal = stock.regularMarketPrice%2>1?"Buy":"Sell"; // Placeholder, replace with SMA calc
-signalEl.textContent = signal;
-} catch(err){ console.error(err); }
-}
-
-async function updateDashboard() {
+async function updateDashboard(){
 if(!selectedSymbol) return;
 fetchPrice(selectedSymbol);
-fetchHistorical(selectedSymbol,"5min");
+fetchCandles(selectedSymbol);
 }
 
-// Event Listeners
 searchBtn.addEventListener("click",()=>{
-const sym = symbolInput.value.trim();
+const sym=symbolInput.value.trim();
 if(!sym) return;
 selectedSymbol=sym;
 currentSymbolEl.textContent=sym.toUpperCase();
@@ -192,9 +163,10 @@ updateDashboard();
 });
 
 document.querySelectorAll(".timeframe-btn").forEach(btn=>{
-btn.addEventListener("click",()=>{ 
+btn.addEventListener("click",()=>{
+if(!selectedSymbol) return;
 const interval=btn.dataset.interval;
-if(selectedSymbol) fetchHistorical(selectedSymbol, interval);
+fetchCandles(selectedSymbol,interval);
 });
 });
 
