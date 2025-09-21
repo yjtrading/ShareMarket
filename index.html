@@ -1,178 +1,209 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Financial Market Dashboard</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
-  <style>
-    body { font-family: 'Inter', sans-serif; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Share Market Dashboard</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+body { font-family: 'Inter', sans-serif; }
+.trend-up { color: #10b981; }
+.trend-down { color: #ef4444; }
+.disabled { opacity: 0.5; pointer-events: none; }
+#chart { height: 400px; }
+</style>
 </head>
-<body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col">
+<body class="bg-gray-900 text-white min-h-screen flex flex-col">
 
-  <!-- Header -->
-  <header class="p-4 bg-gray-800 shadow-md flex justify-between items-center">
-    <h1 class="text-xl font-bold">📊 Share Market Dashboard</h1>
-    <span id="userId" class="text-sm text-green-400">User: Guest</span>
-  </header>
+<header class="p-4 bg-gray-800 shadow-md flex justify-between items-center">
+<h1 class="text-2xl font-bold">Share Market Dashboard</h1>
+<div id="userInfo" class="text-sm">Loading user...</div>
+</header>
 
-  <!-- Main -->
-  <main class="flex-1 p-4 space-y-4">
+<main class="flex-1 p-4 flex flex-col md:flex-row gap-4">
 
-    <!-- Tools -->
-    <section class="bg-gray-800 rounded-xl p-4 shadow">
-      <h2 class="text-lg font-semibold mb-2">Tools</h2>
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
-        <label class="flex items-center space-x-2">
-          <input id="smaTool" type="checkbox" class="form-checkbox text-blue-500" checked>
-          <span>SMA</span>
-        </label>
-        <label class="flex items-center space-x-2">
-          <input id="emaTool" type="checkbox" class="form-checkbox text-blue-500" checked>
-          <span>EMA</span>
-        </label>
-        <label class="flex items-center space-x-2">
-          <input id="rsiTool" type="checkbox" class="form-checkbox text-blue-500">
-          <span>RSI</span>
-        </label>
-        <label class="flex items-center space-x-2">
-          <input id="macdTool" type="checkbox" class="form-checkbox text-blue-500">
-          <span>MACD</span>
-        </label>
-      </div>
-    </section>
+<section class="flex-1 flex flex-col gap-4">
+<div class="flex gap-2">
+<input id="symbolInput" type="text" placeholder="Stock, index, commodity, forex" class="flex-1 p-2 rounded bg-gray-800 text-white outline-none">
+<button id="searchBtn" class="px-4 py-2 bg-blue-600 rounded hover:bg-blue-500">Search</button>
+</div>
 
-    <!-- Chart -->
-    <section class="bg-gray-800 rounded-xl p-4 shadow">
-      <h2 class="text-lg font-semibold mb-2">Price Chart</h2>
-      <canvas id="priceChart" class="w-full h-64"></canvas>
-    </section>
+<div class="bg-gray-800 p-4 rounded shadow-md">
+<h2 class="font-semibold mb-2">Key Indices</h2>
+<div id="indices" class="grid grid-cols-1 md:grid-cols-3 gap-2"></div>
+</div>
 
-    <!-- Signals -->
-    <section class="bg-gray-800 rounded-xl p-4 shadow">
-      <h2 class="text-lg font-semibold mb-2">Signals</h2>
-      <div id="signals" class="text-green-400">Waiting for data...</div>
-    </section>
+<div class="bg-gray-800 p-4 rounded shadow-md">
+<h2 class="font-semibold mb-2">Market News</h2>
+<ul id="marketNews" class="list-disc list-inside space-y-1"></ul>
+</div>
+</section>
 
-  </main>
+<section class="flex-1 flex flex-col gap-4">
+<div class="bg-gray-800 p-4 rounded shadow-md">
+<h2 class="font-semibold mb-2" id="currentSymbol">Select a symbol</h2>
+<p>Price: <span id="currentPrice">--</span></p>
+<p>Volume: <span id="currentVolume">--</span></p>
+<p>Trend: <span id="currentTrend">--</span></p>
+<p>Buy/Sell Signal: <span id="signal" class="font-bold">--</span></p>
+</div>
 
-  <!-- Footer -->
-  <footer class="p-4 bg-gray-800 text-center text-sm text-gray-400">
-    © 2025 Share Market Dashboard
-  </footer>
+<div class="flex gap-2">
+<button class="timeframe-btn px-3 py-1 bg-gray-700 rounded hover:bg-gray-600" data-interval="1m">1m</button>
+<button class="timeframe-btn px-3 py-1 bg-gray-700 rounded hover:bg-gray-600" data-interval="5m">5m</button>
+<button class="timeframe-btn px-3 py-1 bg-gray-700 rounded hover:bg-gray-600" data-interval="1h">1h</button>
+<button class="timeframe-btn px-3 py-1 bg-gray-700 rounded hover:bg-gray-600" data-interval="1d">1d</button>
+<button class="timeframe-btn px-3 py-1 bg-gray-700 rounded hover:bg-gray-600" data-interval="1w">1w</button>
+</div>
 
-  <!-- JS -->
-  <script>
-    // ===============================
-    // Mock Data
-    // ===============================
-    let prices = [];
-    function randomPrice(base=100) {
-      return base + (Math.random()-0.5)*2;
-    }
-    function generateMockData(count=50, base=100) {
-      prices = [];
-      let last = base;
-      for(let i=0;i<count;i++){
-        last = randomPrice(last);
-        prices.push(last);
-      }
-    }
+<div class="flex flex-col gap-1">
+<label><input type="checkbox" id="smaTool" checked> Enable SMA</label>
+<label><input type="checkbox" id="emaTool" checked> Enable EMA</label>
+<label><input type="checkbox" id="rsiTool" checked> Enable RSI</label>
+<label><input type="checkbox" id="macdTool" checked> Enable MACD</label>
+<label><input type="checkbox" id="trendTool" checked> Enable Trend Analysis</label>
+<label><input type="checkbox" id="volumeTool" checked> Enable Volume Analysis</label>
+</div>
 
-    // ===============================
-    // Indicators
-    // ===============================
-    function sma(data, period) {
-      if (data.length < period) return null;
-      return data.slice(-period).reduce((a,b)=>a+b,0)/period;
-    }
-    function ema(data, period) {
-      if (data.length < period) return null;
-      let k = 2/(period+1);
-      return data.slice(-period).reduce((acc,val,i)=>{
-        return acc + val*Math.pow(1-k,i);
-      },0) / (period);
-    }
-    function rsi(data, period=14) {
-      if (data.length < period+1) return null;
-      let gains=0, losses=0;
-      for(let i=data.length-period;i<data.length;i++){
-        let diff = data[i]-data[i-1];
-        if(diff>=0) gains+=diff; else losses-=diff;
-      }
-      if(losses===0) return 100;
-      let rs=gains/losses;
-      return 100-100/(1+rs);
-    }
-    function macd(data, short=12, long=26) {
-      let emaShort = ema(data, short);
-      let emaLong = ema(data, long);
-      if(!emaShort||!emaLong) return null;
-      return emaShort-emaLong;
-    }
+<div id="chart" class="mt-4"></div>
+</section>
 
-    // ===============================
-    // Chart Setup
-    // ===============================
-    const ctx=document.getElementById('priceChart').getContext('2d');
-    const chart=new Chart(ctx,{
-      type:'line',
-      data:{labels:[],datasets:[{label:'Price',data:[],borderColor:'rgb(75,192,192)',tension:0.1}]},
-      options:{responsive:true,scales:{x:{display:false},y:{beginAtZero:false}}}
-    });
+</main>
 
-    // ===============================
-    // Update Loop
-    // ===============================
-    function update(){
-      let newPrice=randomPrice(prices[prices.length-1]);
-      prices.push(newPrice);
-      if(prices.length>100) prices.shift();
-      chart.data.labels=prices.map((_,i)=>i);
-      chart.data.datasets[0].data=prices;
-      chart.update();
+<footer class="p-4 bg-gray-800 text-center text-sm">Share Market Dashboard &copy; 2025</footer>
 
-      // Compute signals
-      let sigs=[];
-      if(document.getElementById('smaTool').checked){
-        let sma50=sma(prices,50), sma200=sma(prices,200);
-        if(sma50&&sma200){
-          if(sma50>sma200) sigs.push("SMA: 📈 Buy");
-          else sigs.push("SMA: 📉 Sell");
-        }
-      }
-      if(document.getElementById('emaTool').checked){
-        let ema20=ema(prices,20), ema50=ema(prices,50);
-        if(ema20&&ema50){
-          if(ema20>ema50) sigs.push("EMA: 📈 Buy");
-          else sigs.push("EMA: 📉 Sell");
-        }
-      }
-      if(document.getElementById('rsiTool').checked){
-        let r=rsi(prices);
-        if(r){
-          if(r<30) sigs.push("RSI: 📈 Oversold → Buy");
-          else if(r>70) sigs.push("RSI: 📉 Overbought → Sell");
-        }
-      }
-      if(document.getElementById('macdTool').checked){
-        let m=macd(prices);
-        if(m){
-          if(m>0) sigs.push("MACD: 📈 Bullish");
-          else sigs.push("MACD: 📉 Bearish");
-        }
-      }
-      document.getElementById('signals').innerHTML=sigs.join("<br>")||"No clear signals";
-    }
+<script>
+const indicesEl = document.getElementById("indices");
+const marketNewsEl = document.getElementById("marketNews");
+const currentSymbolEl = document.getElementById("currentSymbol");
+const currentPriceEl = document.getElementById("currentPrice");
+const currentVolumeEl = document.getElementById("currentVolume");
+const currentTrendEl = document.getElementById("currentTrend");
+const signalEl = document.getElementById("signal");
+const symbolInput = document.getElementById("symbolInput");
+const searchBtn = document.getElementById("searchBtn");
+const smaTool = document.getElementById("smaTool");
+const emaTool = document.getElementById("emaTool");
+const rsiTool = document.getElementById("rsiTool");
+const macdTool = document.getElementById("macdTool");
+const trendTool = document.getElementById("trendTool");
+const volumeTool = document.getElementById("volumeTool");
 
-    // ===============================
-    // Init
-    // ===============================
-    generateMockData();
-    setInterval(update,2000);
-  </script>
+let selectedSymbol = null;
+let chart, candleSeries;
+
+// Mock indices and news
+const mockIndices = [
+{ name: "Nifty 50", price: 18500, change: +120 },
+{ name: "Sensex", price: 62000, change: -50 },
+{ name: "USD/INR", price: 83.2, change: +0.1 }
+];
+const mockNews = [
+"Nifty gains 1% on strong IT sector",
+"Sensex falls due to global cues",
+"USD/INR steady amid RBI policy"
+];
+
+function renderIndices() {
+indicesEl.innerHTML = "";
+mockIndices.forEach(i => {
+const trendClass = i.change >= 0 ? "trend-up" : "trend-down";
+const div = document.createElement("div");
+div.innerHTML = `<strong>${i.name}:</strong> ${i.price} (<span class="${trendClass}">${i.change >= 0 ? '+' : ''}${i.change}</span>)`;
+indicesEl.appendChild(div);
+});
+}
+
+function renderNews() {
+marketNewsEl.innerHTML = "";
+mockNews.forEach(n => {
+const li = document.createElement("li");
+li.textContent = n;
+marketNewsEl.appendChild(li);
+});
+}
+
+function createChart() {
+const chartEl = document.getElementById("chart");
+chart = LightweightCharts.createChart(chartEl, {
+layout: { background: '#1f2937', textColor: 'white' },
+grid: { vertLines: { color: '#334155' }, horzLines: { color: '#334155' } },
+crosshair: { mode: LightweightCharts.CrosshairMode.Normal }
+});
+candleSeries = chart.addCandlestickSeries({ upColor: '#10b981', downColor: '#ef4444', borderVisible: false, wickUpColor: '#10b981', wickDownColor: '#ef4444' });
+}
+
+// Alpha Vantage API Key
+const ALPHA_API = "YOUR_ALPHA_VANTAGE_API_KEY";
+
+// Fetch historical data
+async function fetchHistorical(symbol, interval="5min") {
+try {
+const url = `https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=${symbol}.BSE&interval=${interval}&apikey=${ALPHA_API}`;
+const res = await fetch(url);
+const data = await res.json();
+const key = Object.keys(data).find(k => k.includes("Time Series"));
+const timeSeries = data[key];
+const series = Object.keys(timeSeries).map(t => ({
+time: Math.floor(new Date(t).getTime()/1000),
+open: parseFloat(timeSeries[t]['1. open']),
+high: parseFloat(timeSeries[t]['2. high']),
+low: parseFloat(timeSeries[t]['3. low']),
+close: parseFloat(timeSeries[t]['4. close'])
+}));
+series.reverse();
+candleSeries.setData(series);
+} catch(err){ console.error(err); }
+}
+
+// Fetch latest price from Yahoo Finance
+async function fetchPrice(symbol) {
+try {
+const res = await fetch(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=NSE:${symbol}`);
+const data = await res.json();
+const stock = data.quoteResponse.result[0];
+if(!stock) return;
+currentPriceEl.textContent = stock.regularMarketPrice;
+currentVolumeEl.textContent = volumeTool.checked ? stock.regularMarketVolume : "--";
+const trend = trendTool.checked ? (stock.regularMarketChange>=0?"Up":"Down") : "--";
+currentTrendEl.textContent = trend;
+currentTrendEl.className = trend==="Up"?"trend-up":trend==="Down"?"trend-down":"";
+let signal = "--";
+if(smaTool.checked) signal = stock.regularMarketPrice%2>1?"Buy":"Sell"; // Placeholder, replace with SMA calc
+signalEl.textContent = signal;
+} catch(err){ console.error(err); }
+}
+
+async function updateDashboard() {
+if(!selectedSymbol) return;
+fetchPrice(selectedSymbol);
+fetchHistorical(selectedSymbol,"5min");
+}
+
+// Event Listeners
+searchBtn.addEventListener("click",()=>{
+const sym = symbolInput.value.trim();
+if(!sym) return;
+selectedSymbol=sym;
+currentSymbolEl.textContent=sym.toUpperCase();
+updateDashboard();
+});
+
+document.querySelectorAll(".timeframe-btn").forEach(btn=>{
+btn.addEventListener("click",()=>{ 
+const interval=btn.dataset.interval;
+if(selectedSymbol) fetchHistorical(selectedSymbol, interval);
+});
+});
+
+// Initial render
+renderIndices();
+renderNews();
+createChart();
+setInterval(updateDashboard,15000);
+</script>
+
 </body>
 </html>
